@@ -16,18 +16,18 @@ ExternalProject_Add(target_libcjson
 #    URL "https://sqlite.org/2021/sqlite-autoconf-3360000.tar.gz"
 #    CONFIGURE_COMMAND "${PROJECT_BINARY_DIR}/target_sqlite3-prefix/src/target_sqlite3/configure" "--prefix=${DEPS}"
 #    )
-#ExternalProject_Add(target_libwebsockets
-#    GIT_REPOSITORY  "https://libwebsockets.org/repo/libwebsockets"
-#    GIT_TAG         v4.2-stable
-#    CMAKE_ARGS      -DCMAKE_INSTALL_PREFIX:PATH=${DEPS}
-#    )
+ExternalProject_Add(target_libwebsockets
+    GIT_REPOSITORY  "https://libwebsockets.org/repo/libwebsockets"
+    GIT_TAG         v4.2-stable
+    CMAKE_ARGS      -DCMAKE_INSTALL_PREFIX:PATH=${DEPS}
+    )
 
 #add_library(libsqlite3 SHARED IMPORTED)
 #set_property(TARGET libsqlite3 PROPERTY IMPORTED_LOCATION ${DEPS}/lib/libsqlite3.so)
 add_library(libcjson SHARED IMPORTED)
 set_property(TARGET libcjson PROPERTY IMPORTED_LOCATION ${DEPS}/lib/libcjson.so)
-#add_library(libwebsockets SHARED IMPORTED)
-#set_property(TARGET libwebsockets PROPERTY IMPORTED_LOCATION ${DEPS}/lib/libwebsockets.so)
+add_library(libwebsockets SHARED IMPORTED)
+set_property(TARGET libwebsockets PROPERTY IMPORTED_LOCATION ${DEPS}/lib/libwebsockets.so)
 file(GLOB_RECURSE HEADERS include/*)
 #backend
 add_executable(backend
@@ -38,12 +38,9 @@ add_executable(backend
     src/util.c
     src/lws.c
     ${HEADERS})
-add_dependencies(backend target_libcjson)
+add_dependencies(backend target_libcjson target_libwebsockets)
 target_include_directories(backend PRIVATE include ${DEPS}/include ${SQLite_INCLUDE_DIRS})
-target_link_libraries(backend PUBLIC libcjson  ${LIBWEBSOCKETS_LIBRARIES})
-target_link_libraries(backend PUBLIC ${SQLite3_LIBRARIES})
-#Message(${SQLITE3_LIBRARIES})
-
+target_link_libraries(backend PUBLIC libcjson libwebsockets ${SQLite3_LIBRARIES})
 
 # Debug database
 add_custom_command(
