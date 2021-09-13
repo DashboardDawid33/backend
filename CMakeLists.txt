@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.16.3)
 project(backend C)
 find_program(MAKE NAMES make)
 find_package(SQLite3 REQUIRED)
-find_package(libwebsockets REQUIRED)
 
 include(ExternalProject)
 # don't repeatedly build ExternalProjects.
