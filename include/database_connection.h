@@ -8,4 +8,6 @@ void sql_exec(sqlite3 *db,
           int (*callback)(void*,int,char**,char**),
           void *);
 
+int store_login_in_db(sqlite3* db, const char* username, const char* password);
+
 #endif //BACKEND_DATABASE_CONNECTION_H

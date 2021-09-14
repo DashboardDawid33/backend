@@ -7,13 +7,21 @@
 
 /* one of these created for each message */
 
-typedef struct Message_t {
+typedef struct RawMessage_t {
     void *payload; /* is malloc'd */
     size_t len;
     char binary;
     char first;
     char final;
-} Message;
+} RawMessage;
+
+typedef struct Response_t {
+    void *payload;
+    size_t len;
+    char binary;
+    char first;
+    char final;
+}Response;
 
 typedef struct SessionData_t {
     struct lws_ring *ring;
@@ -35,5 +43,6 @@ typedef struct VhostData_t {
 int
 handle_connection(struct lws *connection_info, enum lws_callback_reasons reason,
                              void *user, void *in, size_t len);
+int initialize_connection(struct lws *connection_info, VhostData *vhost_data, void *in);
 
 #endif //BACKEND_LWS_PROTOCOL_H
