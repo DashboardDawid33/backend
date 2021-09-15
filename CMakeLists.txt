@@ -12,7 +12,6 @@ add_executable(backend
     src/lws_protocol.c
     src/util.c
     src/lws.c
-    src/lws_protocol_init.c
     src/request_handler.c
     )
 

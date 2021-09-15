@@ -12,9 +12,13 @@ static void free_login_request(RegistrationRequest *req) {
     free(req);
 }
 
-/*
- * Return value needs to be freed by caller.
- */
+//TODO : Somehow merge the parsing functions.
+
+/**
+ * @param Json to be parsed
+ * @return Return value needs to be freed by caller.
+ * @author Dawid Sobczak
+ **/
 static RegistrationRequest *
 parse_json_registration(const char *json_message) {
     lwsl_user("%s\n", json_message);
@@ -58,15 +62,25 @@ parse_json_registration(const char *json_message) {
     return request;
 }
 
+/**
+ * @param Json to be parsed
+ * @return Return value needs to be freed by caller.
+ * @author Dawid Sobczak
+ **/
+static RegistrationRequest *
+parse_json_login(const char *json_message) {
+
+    return 1;
+}
 
 int registration_handler(const char *json_message) {
-    sqlite3 *db = sql_open("test.db");
-    if (!db) {
-        return 1;
-    }
     RegistrationRequest *request = NULL;
     if (!(request = parse_json_registration(json_message))) {
-        sqlite3_close(db);
+        return 1;
+    }
+    sqlite3 *db = sql_open("test.db");
+    if (!db) {
+        free_login_request(request);
         return 1;
     }
     if (store_login_in_db(db,request->username,request->password)){
@@ -80,6 +94,18 @@ int registration_handler(const char *json_message) {
 }
 
 int login_handler(const char *json_message) {
+    LoginRequest *request = NULL;
+    if (!(request = parse_json_login(json_message))) {
+        return 1;
+    }
     sqlite3 *db = sql_open("test.db");
+    if (!db) {
+
+        free_login_request(request);
+        return 1;
+    }
+    free_login_request(request);
+    sqlite3_close(db);
+    return 0;
     return 0;
 }

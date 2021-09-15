@@ -46,6 +46,7 @@ int write_message(struct lws *connection_info, unsigned char *message, int len) 
         lwsl_err("ERROR %d writing to ws socket\n", bytes_sent);
         return -1;
     }
+    return 0;
 }
 
 int
@@ -62,16 +63,29 @@ handle_connection(struct lws *connection_info, enum lws_callback_reasons reason,
 
     switch (reason) {
         case LWS_CALLBACK_PROTOCOL_INIT:
-            initialize_connection(connection_info, vhost_data, in);
+            vhost_data = lws_protocol_vh_priv_zalloc(lws_get_vhost(connection_info),
+                                                     lws_get_protocol(connection_info),
+                                                     sizeof(VhostData));
+            if (!vhost_data)
+                return -1;
+
+            vhost_data->context = lws_get_context(connection_info);
+            vhost_data->vhost = lws_get_vhost(connection_info);
+
+            /* get the pointers we were passed in pvo */
+            vhost_data->interrupted = (int *)lws_pvo_search(
+                    (const struct lws_protocol_vhost_options *)in,
+                    "interrupted")->value;
             break;
 
         case LWS_CALLBACK_ESTABLISHED:
             break;
 
         case LWS_CALLBACK_SERVER_WRITEABLE:
-            write_message(connection_info, session_data->response_message, strlen(session_data->response_message));
+            write_message(connection_info, (unsigned char *)session_data->response_message, strlen(session_data->response_message));
             break;
 
+            // TODO: Json message sometimes ends in funny character (ab). Fix that.
         case LWS_CALLBACK_RECEIVE:
 
             if (lws_is_first_fragment(connection_info)) {
@@ -100,14 +114,13 @@ handle_connection(struct lws *connection_info, enum lws_callback_reasons reason,
                         lwsl_warn("Error handling registration.\n");
                     }
                 }
-
                 lws_callback_on_writable(connection_info);
             }
 
             break;
 
         case LWS_CALLBACK_CLOSED:
-            lwsl_user("LWS_CALLBACK_CLOSED\n");
+
             if (!session_data->response_message) {
                 free(session_data->response_message);
             }
