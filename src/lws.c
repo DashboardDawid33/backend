@@ -9,7 +9,7 @@ static struct lws_protocols protocols[] = {
             "websocket-server",
             handle_connection,
             sizeof(SessionData),
-            1024,
+            128,
             0, NULL, 0
 	    },
         { NULL, NULL, 0, 0 } /* terminator */

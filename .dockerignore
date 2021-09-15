@@ -2,3 +2,4 @@
 build
 Dockerfile
 README.md
+build_and_run_backend.sh

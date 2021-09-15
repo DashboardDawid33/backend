@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "cjson/cJSON.h"
+#include "libwebsockets.h"
 
 sqlite3* sql_open(const char* filename) {
     sqlite3* db;
@@ -32,7 +33,9 @@ void sql_exec(sqlite3* db, char* sql, int (*callback)(void *, int, char **, char
 
 int store_login_in_db(sqlite3* db, const char* username, const char* password) {
     char *sql = (char*)malloc(256);
-    snprintf(sql,256, "insert into users (username,password) values(\"%s\", \"%s\");",username,password);
+    lwsl_user("%s, %s\n", username, password);
+    snprintf(sql,256, "insert into users (username,password) values(%s, %s);", username, password);
     sql_exec(db,sql,NULL,NULL);
     free(sql);
+    return 0;
 }

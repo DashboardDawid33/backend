@@ -13,7 +13,8 @@ add_executable(backend
     src/util.c
     src/lws.c
     src/lws_protocol_init.c
-    src/request_handler.c)
+    src/request_handler.c
+    )
 
 include(ExternalProject)
 # don't repeatedly build ExternalProjects.
@@ -52,13 +53,13 @@ ExternalProject_Add_StepDependencies(target_libwebsockets build target_libssl)
 ENDIF()
 
 add_library(libcjson SHARED IMPORTED)
-set_property(TARGET libcjson PROPERTY IMPORTED_LOCATION ${DEPS}/lib64/libcjson.so)
+set_property(TARGET libcjson PROPERTY IMPORTED_LOCATION ${DEPS}/lib/libcjson.so)
 add_library(libwebsockets SHARED IMPORTED)
 set_property(TARGET libwebsockets PROPERTY IMPORTED_LOCATION ${DEPS}/lib/libwebsockets.so)
 file(GLOB_RECURSE HEADERS include/*)
 #backend
 target_include_directories(backend PRIVATE include ${DEPS}/include)
-target_link_libraries(backend PUBLIC libcjson libwebsockets libsqlite3)
+target_link_libraries(backend PUBLIC libcjson libwebsockets libsqlite3 )
 
 # Debug database
 add_custom_command(

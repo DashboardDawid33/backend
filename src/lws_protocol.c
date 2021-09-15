@@ -12,7 +12,7 @@
 static void
 free_message(void *_msg)
 {
-    RawMessage *msg = _msg;
+    Packet *msg = _msg;
 
     free(msg->payload);
     msg->payload = NULL;
@@ -25,19 +25,27 @@ get_request_type(const char *incoming_data) {
     if(!json) {
         return UNDEFINED;
     }
-    cJSON *request_type = cJSON_GetObjectItemCaseSensitive(json, REQUEST_TYPE_JSON);
+    cJSON *request_type = cJSON_GetObjectItemCaseSensitive(json, REQUEST_FIELD);
     if(!request_type) {
         cJSON_Delete(json);
         return UNDEFINED;
     }
 
     RequestType request = UNDEFINED;
-    if(strcmp(request_type->valuestring, REQUEST_TYPE_LOGIN_JSON) == 0) {
+    if(strcmp(request_type->valuestring, LOGIN_REQUEST_VALUE) == 0) {
         request = LOGIN_REQUEST;
-    } else if (strcmp(request_type->valuestring, REQUEST_TYPE_REGISTRATION_JSON) == 0) {
+    } else if (strcmp(request_type->valuestring, REGISTRATION_REQUEST_VALUE) == 0) {
         request = REGISTRATION_REQUEST;
     }
     return request;
+}
+
+int write_message(struct lws *connection_info, unsigned char *message, int len) {
+    int bytes_sent = lws_write(connection_info, (unsigned char *)message, len, 0);
+    if (bytes_sent < len) {
+        lwsl_err("ERROR %d writing to ws socket\n", bytes_sent);
+        return -1;
+    }
 }
 
 int
@@ -49,9 +57,8 @@ handle_connection(struct lws *connection_info, enum lws_callback_reasons reason,
     const struct lws_protocols *protocols = lws_get_protocol(connection_info);
     VhostData *vhost_data = (VhostData*)lws_protocol_vh_priv_get(vhost, protocols);
 
-    const Response *response_message;
-    RawMessage incoming_message;
-    int m, n, flags;
+    Packet incoming_message;
+    int m, flags;
 
     switch (reason) {
         case LWS_CALLBACK_PROTOCOL_INIT:
@@ -59,111 +66,54 @@ handle_connection(struct lws *connection_info, enum lws_callback_reasons reason,
             break;
 
         case LWS_CALLBACK_ESTABLISHED:
-            lwsl_warn("LWS_CALLBACK_ESTABLISHED\n");
-            session_data->ring = lws_ring_create(sizeof(RawMessage), RING_DEPTH,
-                                        free_message);
-            if (!session_data->ring)
-                return 1;
-            session_data->tail = 0;
             break;
 
         case LWS_CALLBACK_SERVER_WRITEABLE:
-
-            lwsl_user("LWS_CALLBACK_SERVER_WRITEABLE\n");
-
-            if (session_data->write_consume_pending) {
-                /* perform the deferred fifo consume */
-                lws_ring_consume_single_tail(session_data->ring, &session_data->tail, 1);
-                session_data->write_consume_pending = 0;
-            }
-
-            response_message = lws_ring_get_element(session_data->ring, &session_data->tail);
-            if (!response_message) {
-                lwsl_user(" (nothing in ring)\n");
-                break;
-            }
-
-            flags = lws_write_ws_flags(
-                    response_message->binary ? LWS_WRITE_BINARY : LWS_WRITE_TEXT,
-                    response_message->first, response_message->final);
-
-
-            m = lws_write(connection_info, ((unsigned char *)response_message->payload) +
-                               LWS_PRE, response_message->len, (enum lws_write_protocol)flags);
-            if (m < (int)response_message->len) {
-                lwsl_err("ERROR %d writing to ws socket\n", m);
-                return -1;
-            }
-
-            lwsl_user(" wrote %d: flags: 0x%x first: %d final %d\n",
-                      m, flags, response_message->first, response_message->final);
-
+            write_message(connection_info, session_data->response_message, strlen(session_data->response_message));
             break;
 
         case LWS_CALLBACK_RECEIVE:
 
-            lwsl_user("LWS_CALLBACK_RECEIVE: %4d (rpp %5d, first %d, "
-                      "last %d, bin %d, msglen %d (+ %d = %d))\n",
-                      (int)len, (int)lws_remaining_packet_payload(connection_info),
-                      lws_is_first_fragment(connection_info),
-                      lws_is_final_fragment(connection_info),
-                      lws_frame_is_binary(connection_info), session_data->msglen, (int)len,
-                      (int)session_data->msglen + (int)len);
-
-            incoming_message.first = (char)lws_is_first_fragment(connection_info);
-            incoming_message.final = (char)lws_is_final_fragment(connection_info);
-            incoming_message.binary = (char)lws_frame_is_binary(connection_info);
-
-            n = (int)lws_ring_get_count_free_elements(session_data->ring);
-            if (!n) {
-                lwsl_user("dropping!\n");
-                break;
+            if (lws_is_first_fragment(connection_info)) {
+                session_data->message = malloc(len);
+                memset(session_data->message, 0, len);
+                memcpy(session_data->message, in, len);
+            } else {
+                session_data->message = realloc(session_data->message, session_data->message_len + len);
+                memcpy(session_data->message + session_data->message_len, (char *)in, len);
+                session_data->message_len += len;
             }
 
-            if (incoming_message.final)
-                session_data->msglen = 0;
-            else
-                session_data->msglen += (uint32_t)len;
+            if (lws_is_final_fragment(connection_info)) {
+                session_data->response_message = (char *)malloc(256 + LWS_PRE);
+                snprintf(session_data->response_message + LWS_PRE,256, "This is the response.");
+                session_data->response_message += LWS_PRE;
 
-            incoming_message.len = len;
-            /* notice we over-allocate by LWS_PRE */
-
-            incoming_message.payload = malloc(LWS_PRE + len);
-            if (!incoming_message.payload) {
-                lwsl_user("OOM: dropping\n");
-                break;
-            }
-
-            memcpy((char *)incoming_message.payload + LWS_PRE, in, len);
-            const char* message = (char*) (incoming_message.payload + LWS_PRE);
-
-            RequestType request = get_request_type(message);
-            if (request == LOGIN_REQUEST) {
-                if(login_handler(message)){
-                    lwsl_user("Error handling login.");
+                // Handle request
+                RequestType request = get_request_type(session_data->message);
+                if (request == LOGIN_REQUEST) {
+                    if(login_handler(session_data->message)){
+                        lwsl_user("Error handling login.\n");
+                    }
+                } else if (request == REGISTRATION_REQUEST) {
+                    if(registration_handler(session_data->message)) {
+                        lwsl_warn("Error handling registration.\n");
+                    }
                 }
-            } else if (request == REGISTRATION_REQUEST) {
-                if(registration_handler(message)) {
-                    lwsl_user("Error handling registration.");
-                }
-            }
 
-            if (!lws_ring_insert(session_data->ring, &incoming_message, 1)) {
-                free_message(&incoming_message);
-                lwsl_user("dropping!\n");
-                break;
+                lws_callback_on_writable(connection_info);
             }
-            lws_callback_on_writable(connection_info);
 
             break;
 
         case LWS_CALLBACK_CLOSED:
             lwsl_user("LWS_CALLBACK_CLOSED\n");
-            lws_ring_destroy(session_data->ring);
-
-            if (!*vhost_data->interrupted)
-                *vhost_data->interrupted = 1 + session_data->completed;
-
+            if (!session_data->response_message) {
+                free(session_data->response_message);
+            }
+            if(!session_data->message) {
+                free(session_data->message);
+            }
             lws_cancel_service(lws_get_context(connection_info));
             break;
 

@@ -1,0 +1,53 @@
+/*
+
+
+incoming_message.payload = malloc(LWS_PRE + len);
+if (!incoming_message.payload) {
+    lwsl_user("OOM: Dropping packet.\n");
+    return 0;
+}
+// Copy packet message into payload
+memcpy((char *)incoming_message.payload + LWS_PRE, in, len);
+*/
+
+/*
+            if (!lws_ring_insert(session_data->ring, &incoming_message, 1)) {
+                free_message(&incoming_message);
+                lwsl_user("dropping!\n");
+                break;
+            } else {
+                lwsl_user("Adding packet to ring buffer!\n");
+            }
+            */
+
+/*
+    if (len) {
+      //puts((const char *)in);
+      //lwsl_hexdump_level(LLL_USER, in, len);
+    }
+    */
+/*
+if (incoming_message.final)
+    session_data->msglen = 0;
+else
+    session_data->msglen += (uint32_t)len;
+*/
+
+
+//If the server chokes and can't handle the input, controls flow of input.
+/*
+if (n < 3 && !session_data->flow_controlled) {
+    session_data->flow_controlled = 1;
+    lws_rx_flow_control(connection_info, 0);
+}
+*/
+
+// TODO: ?????????
+/*
+if (session_data->write_consume_pending) {
+    // perform the deferred fifo consume
+    lws_ring_consume(session_data->ring, &session_data->tail, ((void *) 0), 1);
+    lws_ring_update_oldest_tail(session_data->ring, *(&session_data->tail));
+    session_data->write_consume_pending = 0;
+}
+*/

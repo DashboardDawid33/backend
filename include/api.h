@@ -1,19 +1,28 @@
 #ifndef BACKEND_API_H
 #define BACKEND_API_H
-#define REQUEST_TYPE_JSON "request_type"
-#define REQUEST_TYPE_REGISTRATION_JSON "register"
-#define REQUEST_TYPE_LOGIN_JSON "login"
-#define USERNAME_JSON "username"
-#define PASSWORD_JSON "password"
+#define REQUEST_FIELD "request_type"
+#define LOGIN_REQUEST_VALUE "LOGIN"
+#define REGISTRATION_REQUEST_VALUE "REGISTER"
+#define USERNAME_FIELD "username"
+#define PASSWORD_FIELD "password"
 
 typedef enum RequestType {LOGIN_REQUEST, REGISTRATION_REQUEST, UNDEFINED} RequestType;
 
-struct LoginRequest {
+typedef struct LoginRequest_t {
     char *username;
     char *password;
-};
-struct LoginResponse {
+}LoginRequest;
+typedef struct LoginResponse {
     int is_authenticated;
     char *response;
-};
+}LoginResponse;
+
+typedef struct RegistrationRequest_t {
+    char *username;
+    char *password;
+}RegistrationRequest;
+typedef struct RegistrationResponse_t {
+    int successful;
+    char *response;
+}RegistrationResponse;
 #endif //BACKEND_API_H

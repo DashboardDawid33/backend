@@ -6,30 +6,26 @@
 #define RING_DEPTH 4096
 
 /* one of these created for each message */
+typedef struct lws_dll2 lws_dll2;
 
-typedef struct RawMessage_t {
+typedef struct Packet_t {
     void *payload; /* is malloc'd */
     size_t len;
     char binary;
     char first;
     char final;
-} RawMessage;
+    lws_dll2 list;
+} Packet;
 
 typedef struct Response_t {
-    void *payload;
-    size_t len;
-    char binary;
-    char first;
-    char final;
+    char *message;
 }Response;
 
 typedef struct SessionData_t {
-    struct lws_ring *ring;
-    uint32_t msglen;
-    uint32_t tail;
-    uint8_t completed:1;
-    uint8_t flow_controlled:1;
-    uint8_t write_consume_pending:1;
+    char *message;
+    int message_len;
+    char *response_message;
+    uint32_t message_count;
 } SessionData;
 
 typedef struct VhostData_t {

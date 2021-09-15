@@ -15,4 +15,5 @@ int initialize_connection(struct lws *connection_info, VhostData *vhost_data, vo
     vhost_data->interrupted = (int *)lws_pvo_search(
             (const struct lws_protocol_vhost_options *)in,
             "interrupted")->value;
+    return 0;
 }
