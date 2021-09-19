@@ -1,74 +1,142 @@
+#include "lws.h"
 #include <string.h>
 #include "libwebsockets.h"
-#include "lws_protocol.h"
-#include <signal.h>
-#define PORT 8888
+#include "cjson/cJSON.h"
+#include "request_handler.h"
 
-static struct lws_protocols protocols[] = {
-        {
-            "websocket-server",
-            handle_connection,
-            sizeof(SessionData),
-            128,
-            0, NULL, 0
-	    },
-        { NULL, NULL, 0, 0 } /* terminator */
-};
+static void
+free_message(void *_msg) {
+    Packet *msg = _msg;
 
-static int interrupted;
-
-/* pass pointers to shared vars to the protocol */
-
-static const struct lws_protocol_vhost_options pvo_interrupted = {
-        NULL,
-        NULL,
-        "interrupted",		/* pvo name */
-        (void *)&interrupted	/* pvo value */
-};
-
-static const struct lws_protocol_vhost_options pvo = {
-        NULL,				/* "next" pvo linked-list */
-        &pvo_interrupted,		/* "child" pvo linked-list */
-        "websocket-server",	/* protocol name we belong to on this vhost */
-        ""				/* ignored */
-};
-
-void sigint_handler(int sig)
-{
-    interrupted = 1;
+    free(msg->payload);
+    msg->payload = NULL;
+    msg->len = 0;
 }
 
-int lws_start(int argc, const char **argv)
-{
-    signal(SIGINT, sigint_handler);
-
-    int logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE;
-    lws_set_log_level(logs, NULL);
-
-    struct lws_context_creation_info info;
-    struct lws_context *context;
-
-    memset(&info, 0, sizeof info); /* otherwise uninitialized garbage */
-    info.port = PORT;
-    info.protocols = protocols;
-    info.pvo = &pvo;
-    info.pt_serv_buf_size = 32 * 1024;
-    info.options = LWS_SERVER_OPTION_VALIDATE_UTF8 |
-                   LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
-
-    context = lws_create_context(&info);
-    if (!context) {
-        lwsl_err("lws init failed\n");
-        return 1;
+RequestType
+get_request_type(const char *incoming_data) {
+    cJSON *json = cJSON_Parse(incoming_data);
+    if (!json) {
+        return UNDEFINED_REQUEST;
+    }
+    cJSON *request_type = cJSON_GetObjectItemCaseSensitive(json, REQUEST_FIELD);
+    if (!request_type) {
+        cJSON_Delete(json);
+        return UNDEFINED_REQUEST;
     }
 
-    int n = 0;
-    while (n >= 0 && !interrupted)
-        n = lws_service(context, 0);
+    RequestType request = UNDEFINED_REQUEST;
+    if (strcmp(request_type->valuestring, LOGIN_REQUEST_VALUE) == 0) {
+        request = LOGIN_REQUEST;
+    } else if (strcmp(request_type->valuestring, REGISTRATION_REQUEST_VALUE) == 0) {
+        request = REGISTRATION_REQUEST;
+    }
+    return request;
+}
 
-    lws_context_destroy(context);
+int write_message(struct lws *connection_info, unsigned char *message, int len) {
+    int bytes_sent = lws_write(connection_info, (unsigned char *) message, len, 0);
+    if (bytes_sent < len) {
+        lwsl_err("ERROR %d writing to ws socket\n", bytes_sent);
+        return -1;
+    }
+    return 0;
+}
 
-    lwsl_user("Completed %s\n", interrupted == 2 ? "OK" : "failed");
+int
+handle_connection(struct lws *connection_info, enum lws_callback_reasons reason,
+                  void *user, void *in, size_t len) {
+    SessionData *session_data = (SessionData *) user;
+    struct lws_vhost *vhost = lws_get_vhost(connection_info);
+    const struct lws_protocols *protocols = lws_get_protocol(connection_info);
+    VhostData *vhost_data = (VhostData *) lws_protocol_vh_priv_get(vhost, protocols);
 
-    return interrupted != 2;
+    switch (reason) {
+        case LWS_CALLBACK_PROTOCOL_INIT:
+            vhost_data = lws_protocol_vh_priv_zalloc(lws_get_vhost(connection_info),
+                                                     lws_get_protocol(connection_info),
+                                                     sizeof(VhostData));
+            if (!vhost_data)
+                return -1;
+
+            vhost_data->context = lws_get_context(connection_info);
+            vhost_data->vhost = lws_get_vhost(connection_info);
+
+            /* get the pointers we were passed in pvo */
+            vhost_data->interrupted = (int *) lws_pvo_search(
+                    (const struct lws_protocol_vhost_options *) in,
+                    "interrupted")->value;
+            break;
+
+        case LWS_CALLBACK_ESTABLISHED:
+            break;
+
+        case LWS_CALLBACK_SERVER_WRITEABLE:
+            write_message(connection_info, (unsigned char *) session_data->response_message,
+                          strlen(session_data->response_message));
+            break;
+
+        case LWS_CALLBACK_RECEIVE:
+            // TODO: Json message sometimes ends in funny character (ab). Fix that.
+
+            if (lws_is_first_fragment(connection_info)) {
+                session_data->message = malloc(len);
+                memset(session_data->message, 0, len);
+                memcpy(session_data->message, in, len);
+            } else {
+                session_data->message = realloc(session_data->message, session_data->message_len + len);
+                memcpy(session_data->message + session_data->message_len, (char *) in, len);
+                session_data->message_len += len;
+            }
+
+            if (lws_is_final_fragment(connection_info)) {
+                session_data->response_message = (char *) malloc(256 + LWS_PRE);
+                snprintf(session_data->response_message + LWS_PRE, 256, "This is the response.");
+                session_data->response_message += LWS_PRE;
+
+                // Handle request
+                RequestType request = get_request_type(session_data->message);
+                if (request == LOGIN_REQUEST) {
+                    LoginData *request = NULL;
+                    if (!(request = parse_json_login(session_data->message))) {
+                        lwsl_user("Cannot parse json login.\n");
+                        return 1;
+                    }
+                    if (login_handler(request)) {
+                        lwsl_user("Error handling login.\n");
+                    }
+                } else if (request == REGISTRATION_REQUEST) {
+                    RegistrationData *request = NULL;
+                    if (!(request = parse_json_registration(session_data->message))) {
+                        lwsl_user("Cannot parse json registration.\n");
+                        return 1;
+                    }
+                    if (registration_handler(request)) {
+                        lwsl_warn("Error handling registration.\n");
+                    }
+                } else if (request == UNDEFINED_REQUEST) {
+                    lwsl_user("Missing / incorrect request field / cannot parse json. Dropping.");
+                    break;
+                }
+                lws_callback_on_writable(connection_info);
+            }
+
+            break;
+
+        case LWS_CALLBACK_CLOSED:
+
+            if (!session_data->response_message) {
+                free(session_data->response_message);
+            }
+            if (!session_data->message) {
+                free(session_data->message);
+            }
+            lws_cancel_service(lws_get_context(connection_info));
+            break;
+
+        default:
+            break;
+    }
+
+    return 0;
 }

@@ -8,9 +8,7 @@ add_executable(backend
     test.db
     ${HEADERS}
     src/main.c
-    src/database_connection.c
-    src/lws_protocol.c
-    src/util.c
+    src/database_utils.c
     src/lws.c
     src/request_handler.c
     )
