@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.16.3)
 project(backend C)
 # Check if these libraries exist.
-find_package(libwebsockets QUIET)
+find_package(libwebsockets)
+find_package(Libwebsockets)
 find_package(SQLite3 QUIET)
 find_package(cJSON)
 include(ExternalProject)
