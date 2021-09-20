@@ -14,3 +14,6 @@ cd build
 cmake ..
 make
 ```
+
+### TODO
+Get cmake to create dependency libraries in a single folder under build
