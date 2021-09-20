@@ -54,7 +54,7 @@ ELSE()
 ENDIF()
 
 # --------------------- LIBWEBSOCKETS ---------------------
-IF(libwebsockets_FOUND)
+IF(libwebsockets_FOUND OR Libwebsockets_FOUND)
     message("Libwebsockets libraries : ${LIBWEBSOCKETS_LIBRARIES}")
     target_link_libraries(backend PUBLIC ${LIBWEBSOCKETS_LIBRARIES})
 ELSE()
