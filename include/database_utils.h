@@ -16,9 +16,12 @@ sqlite3* sql_open(const char* filename);
  * @return Return non-zero value on error.
  */
 int store_login_in_db(sqlite3* db, const char* username, const char* password);
+/**
+ * @param db database to insert data into.
+ * @param username
+ * @param password
+ * @return Return non-zero value on error / validation failure.
+ */
 int validate_user(sqlite3* db, const char* username, const char* password);
-
-//Testing
-int callback(void *NotUsed,int argc ,char **argv,char **azColName);
 
 #endif //BACKEND_DATABASE_UTILS_H

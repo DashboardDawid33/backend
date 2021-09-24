@@ -42,7 +42,7 @@ if (n < 3 && !session_data->flow_controlled) {
 }
 */
 
-// TODO: ?????????
+// TODO: how does lws_ring work?????????
 /*
 if (session_data->write_consume_pending) {
     // perform the deferred fifo consume

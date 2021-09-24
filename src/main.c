@@ -3,6 +3,9 @@
 #include "libwebsockets.h"
 #include "lws.h"
 #include <signal.h>
+#include "database_utils.h"
+
+//extern sqlite3 *db = NULL;
 
 static struct lws_protocols protocols[] = {
         {
@@ -59,6 +62,7 @@ int main(int argc, const char **argv) {
         lwsl_err("lws init failed\n");
         return 1;
     }
+
 
     int n = 0;
     while (n >= 0 && !interrupted)

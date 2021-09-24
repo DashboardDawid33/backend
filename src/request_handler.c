@@ -20,6 +20,12 @@ void free_login_request(const LoginData *data) {
     free((void *) data);
 }
 
+void free_err_msg(const ErrMsg *err) {
+    if (!err->msg)
+        free(err->msg);
+    free(err);
+}
+
 RegistrationData *
 parse_json_registration(const char *json_message) {
     lwsl_user("%s\n", json_message);
@@ -65,7 +71,6 @@ parse_json_registration(const char *json_message) {
 
 LoginData *
 parse_json_login(const char *json_message) {
-    lwsl_user("%s\n", json_message);
     cJSON *json = cJSON_Parse(json_message);
     if (!json) {
         return NULL;
@@ -106,36 +111,52 @@ parse_json_login(const char *json_message) {
     return request;
 }
 
-int registration_handler(const RegistrationData *request) {
+int registration_handler(char* json_message, ErrorKind *err) {
+    RegistrationData *registration_data = NULL;
+    if (!(registration_data = parse_json_registration(json_message))) {
+        lwsl_user("Cannot parse json registration.\n");
+        return 1;
+    }
+
     sqlite3 *db = sql_open("test.db");
     if (!db) {
-        free_registration_request(request);
+        free_registration_request(registration_data);
         return 1;
     }
-    if (store_login_in_db(db, request->username, request->password)) {
+
+    if (store_login_in_db(db, registration_data->username, registration_data->password)) {
         sqlite3_close(db);
-        free_registration_request(request);
+        free_registration_request(registration_data);
         return 1;
     }
-    free_registration_request(request);
+    free_registration_request(registration_data);
     sqlite3_close(db);
     return 0;
 }
 
-int login_handler(const LoginData *request) {
+int login_handler(const char* json_message, ErrorKind *err) {
+    LoginData *login_data = NULL;
+    if ((login_data = parse_json_login(json_message))) {
+        lwsl_user("Cannot parse json login.\n");
+        return 1;
+    }
+
     sqlite3 *db = sql_open("test.db");
     if (!db) {
-        free_login_request(request);
+        free_login_request(login_data);
         return 1;
     }
-    lwsl_user("Attempting to validate user %s : %s\n", request->username, request->password);
-    if (validate_user(db, request->username,request->password)){
+
+    lwsl_user("Attempting to validate user %s : %s\n", login_data->username, login_data->password);
+    if (validate_user(db, login_data->username, login_data->password)){
         lwsl_user("Cannot validate user\n");
-        free_login_request(request);
+        free_login_request(login_data);
         sqlite3_close(db);
         return 1;
+    } else {
+
     }
-    free_login_request(request);
+    free_login_request(login_data);
     sqlite3_close(db);
     return 0;
 }

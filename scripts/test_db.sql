@@ -1,5 +1,7 @@
 create table USERS (
+    UUID        CHAR(36)    NOT NULL,
     USERNAME    TEXT    NOT NULL,
     PASSWORD    TEXT    NOT NULL
 );
-INSERT INTO USERS (USERNAME, PASSWORD) VALUES('dawid', 'correct-password');
+INSERT INTO USERS (UUID, USERNAME, PASSWORD) VALUES('1','dawid', 'correct-password');
+INSERT INTO USERS (UUID, USERNAME, PASSWORD) VALUES('2','test', 'test');

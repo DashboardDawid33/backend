@@ -4,10 +4,11 @@
 #include "cjson/cJSON.h"
 #include "request_handler.h"
 
+int clients = 0;
+
 static void
 free_message(void *_msg) {
     Packet *msg = _msg;
-
     free(msg->payload);
     msg->payload = NULL;
     msg->len = 0;
@@ -46,6 +47,7 @@ int write_message(struct lws *connection_info, unsigned char *message, int len) 
 int
 handle_connection(struct lws *connection_info, enum lws_callback_reasons reason,
                   void *user, void *in, size_t len) {
+
     SessionData *session_data = (SessionData *) user;
     struct lws_vhost *vhost = lws_get_vhost(connection_info);
     const struct lws_protocols *protocols = lws_get_protocol(connection_info);
@@ -77,16 +79,22 @@ handle_connection(struct lws *connection_info, enum lws_callback_reasons reason,
             break;
 
         case LWS_CALLBACK_RECEIVE:
-            // TODO: Json message sometimes ends in funny character (ab). Fix that.
 
+            // Todo: figure out a better way of receiving connections.
             if (lws_is_first_fragment(connection_info)) {
+                //Copy message from received data into session data
                 session_data->message = malloc(len);
-                memset(session_data->message, 0, len);
-                memcpy(session_data->message, in, len);
+                strncpy(session_data->message, (char *) in, len);
+
+                // If \0 is not set, garbage data might ensue.
+                session_data->message[len] = '\0';
+                session_data->message_len = len;
+                session_data->message_count++;
             } else {
                 session_data->message = realloc(session_data->message, session_data->message_len + len);
                 memcpy(session_data->message + session_data->message_len, (char *) in, len);
                 session_data->message_len += len;
+                session_data->message_count++;
             }
 
             if (lws_is_final_fragment(connection_info)) {
@@ -94,31 +102,31 @@ handle_connection(struct lws *connection_info, enum lws_callback_reasons reason,
                 snprintf(session_data->response_message + LWS_PRE, 256, "This is the response.");
                 session_data->response_message += LWS_PRE;
 
+                lwsl_user("Message on receive : %s\n", session_data->message);
+
                 // Handle request
                 RequestType request = get_request_type(session_data->message);
                 if (request == LOGIN_REQUEST) {
-                    LoginData *request = NULL;
-                    if (!(request = parse_json_login(session_data->message))) {
-                        lwsl_user("Cannot parse json login.\n");
-                        return 1;
-                    }
-                    if (login_handler(request)) {
+                    ErrMsg *err = (ErrMsg*)malloc(sizeof(ErrMsg));
+                    if (login_handler(session_data->message, err)) {
                         lwsl_user("Error handling login.\n");
                     }
+                    free_err_msg(err);
                 } else if (request == REGISTRATION_REQUEST) {
-                    RegistrationData *request = NULL;
-                    if (!(request = parse_json_registration(session_data->message))) {
-                        lwsl_user("Cannot parse json registration.\n");
-                        return 1;
-                    }
-                    if (registration_handler(request)) {
+                    ErrMsg *err = (ErrMsg*)malloc(sizeof(ErrMsg));
+                    //TODO: Finish refactoring this part with error messages.
+                    registration_handler(session_data->message, err)
+                    if (err->kind != ERR_NONE) {
                         lwsl_warn("Error handling registration.\n");
                     }
+                    free_err_msg(err);
                 } else if (request == UNDEFINED_REQUEST) {
                     lwsl_user("Missing / incorrect request field / cannot parse json. Dropping.");
                     break;
                 }
                 lws_callback_on_writable(connection_info);
+                clients++;
+                lwsl_notice("Served clients : %d\n", clients);
             }
 
             break;
